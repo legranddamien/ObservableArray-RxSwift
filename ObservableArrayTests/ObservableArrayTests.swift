@@ -777,4 +777,91 @@ class ObservableArrayTests: XCTestCase {
             XCTAssertNil(error, "\(error)")
         }
     }
+    
+    func testChangeAll() {
+        var a: ObservableArray<String> = ["foo", "bar", "buzz"]
+        
+        let exp = expectation(description: "event emitted")
+        a.rx_events().subscribe { (eventObject) -> Void in
+            guard let event = eventObject.element else { return XCTFail() }
+            XCTAssertEqual([1,2,3], event.insertedIndices)
+            XCTAssertEqual([1,2], event.deletedIndices)
+            XCTAssertEqual([0], event.updatedIndices)
+            XCTAssertEqual(4, a.count)
+            XCTAssertEqual("oof", a[0])
+            XCTAssertEqual("milk", a[1])
+            XCTAssertEqual("coffee", a[2])
+            XCTAssertEqual("tea", a[3])
+            exp.fulfill()
+        }
+        .addDisposableTo(disposeBag)
+        
+        let delete = ArrayChange<String>(indexes: [1,2])
+        let add = ArrayChange<String>(withElements: ["milk", "coffee", "tea"], at: 1)
+        let update = ArrayChange<String>(indexes: [0], elements: ["oof"])
+        
+        a.change(updated: update, deleted: delete, added: add)
+        
+        waitForExpectations(timeout: 1) { (error) in
+            XCTAssertNil(error, "\(error)")
+        }
+    }
+    
+    func testChangeConplexAdd() {
+        var a: ObservableArray<String> = ["foo", "bar", "buzz"]
+        
+        let exp = expectation(description: "event emitted")
+        a.rx_events().subscribe { (eventObject) -> Void in
+            guard let event = eventObject.element else { return XCTFail() }
+            XCTAssertEqual([0], event.updatedIndices)
+            XCTAssertEqual([1,2], event.deletedIndices)
+            XCTAssertEqual([0,2,3], event.insertedIndices)
+            XCTAssertEqual(4, a.count)
+            XCTAssertEqual("milk", a[0])
+            XCTAssertEqual("oof", a[1])
+            XCTAssertEqual("coffee", a[2])
+            XCTAssertEqual("tea", a[3])
+            exp.fulfill()
+            }
+            .addDisposableTo(disposeBag)
+        
+        let delete = ArrayChange<String>(indexes: [1,2])
+        let add = ArrayChange<String>(indexes: [0,3,4], elements: ["milk", "coffee", "tea"])
+        let update = ArrayChange<String>(indexes: [0], elements: ["oof"])
+        
+        a.change(updated: update, deleted: delete, added: add)
+        
+        waitForExpectations(timeout: 1) { (error) in
+            XCTAssertNil(error, "\(error)")
+        }
+    }
+    
+//    func testThreadSafety() {
+//        
+//        var a: ObservableArray<String> = ["foo"]
+//        
+//        expectation(description: "")
+//
+//        a.rx_events().subscribe { _ in }
+//            .addDisposableTo(disposeBag)
+//        
+//        DispatchQueue.global(qos: .default).async {
+//            for _ in 0 ..< Int.max {
+//                //print(a.elements)
+//                a.append("buzz")
+//            }
+//        }
+//        
+//        DispatchQueue.global(qos: .userInitiated).async {
+//            for _ in 0 ..< Int.max where a.isEmpty != true {
+//                if a.isEmpty == false  {
+//                    a.removeFirst()
+//                }
+//            }
+//        }
+//        
+//        waitForExpectations(timeout: 1) { (error) in
+//            XCTAssertNil(error, "\(error)")
+//        }
+//    }
 }

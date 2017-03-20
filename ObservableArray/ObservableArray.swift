@@ -22,6 +22,23 @@ public struct ArrayChangeEvent {
     }
 }
 
+public struct ArrayChange<Element> {
+    public let indexes: [Int]
+    public let elements: [Element]
+    
+    public init(indexes: [Int], elements: [Element] = []) {
+        assert(indexes.count > 0)
+        self.indexes = indexes
+        self.elements = elements
+    }
+    
+    public init(withElements elements: [Element], at: Int) {
+        assert(elements.count > 0)
+        self.elements = elements
+        self.indexes = [at]
+    }
+}
+
 public struct ObservableArray<Element>: ExpressibleByArrayLiteral {
     public typealias EventType = ArrayChangeEvent
 
@@ -157,6 +174,75 @@ extension ObservableArray: MutableCollection {
             arrayDidChange(ArrayChangeEvent(deleted: [elements.count]))
         }
         return e
+    }
+    
+    
+    /// Update the array in one shot
+    /// 
+    /// ##Note##
+    ///
+    /// Order of things :
+    /// * Delete
+    /// * Add
+    /// * Update
+    ///
+    /// You should give the indexes of update and add as there are for the original array. It means that if you add at 1 and delete at 0 the add will be at 0.
+    ///
+    /// - Parameters:
+    ///   - updated: description on indexes to update with corresponding Element
+    ///   - deleted: description of indexes to delete
+    ///   - added: description of indexes to add with corresponding elements
+    public mutating func change(updated: ArrayChange<Element>?, deleted: ArrayChange<Element>?, added: ArrayChange<Element>?) {
+        
+        let updateIndexes: [Int] = updated?.indexes ?? []
+        var deleteIndexes: [Int] = []
+        var tmpAddIndexes: [Int] = added?.indexes ?? []
+        var addIndexes: [Int] = []
+        
+        if let updated = updated {
+            for i in 0..<updated.indexes.count {
+                elements[updated.indexes[i]] = updated.elements[i]
+            }
+        }
+        
+        if let deleted = deleted {
+            deleteIndexes = deleted.indexes
+            for index in deleted.indexes.sorted(by: { $0 > $1 }) {
+                elements.remove(at: index)
+                tmpAddIndexes = tmpAddIndexes.map({ ($0 > index) ? $0-1 : $0 })
+            }
+        }
+        
+        if let added = added {
+            
+            let originalCount = elements.count
+            
+            if tmpAddIndexes.count == 1 && added.elements.count > 1 {
+                addIndexes.append(contentsOf: tmpAddIndexes[0]..<tmpAddIndexes[0]+added.elements.count)
+                elements.insert(contentsOf: added.elements, at: tmpAddIndexes[0])
+            } else {
+                var count = 0
+                for index in tmpAddIndexes.sorted(by: {$0 < $1}) {
+                    
+                    let i = tmpAddIndexes.index(of: index)!
+                    if index+count < elements.count {
+                        elements.insert(added.elements[i], at: index+count)
+                        addIndexes.append(index+count)
+                    }else {
+                        addIndexes.append(elements.count)
+                        elements.append(added.elements[i])
+                    }
+                    
+                    if index < originalCount {
+                        count += 1
+                    }
+                }
+            }
+        }
+        
+        if updateIndexes.count+deleteIndexes.count+addIndexes.count > 0 {
+            arrayDidChange(ArrayChangeEvent(inserted: addIndexes, deleted: deleteIndexes, updated: updateIndexes))
+        }
     }
 }
 
